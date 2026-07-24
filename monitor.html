@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大数投资监控</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font: 12px/1.5 'Microsoft YaHei', sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 10px; }
+h1 { font-size: 18px; color: #00d4ff; margin-bottom: 5px; }
+.meta { color: #888; font-size: 11px; margin-bottom: 10px; }
+table { width: 100%; border-collapse: collapse; }
+th { background: #16213e; color: #00d4ff; padding: 6px 8px; text-align: right; position: sticky; top: 0; z-index: 2; }
+td { padding: 4px 8px; text-align: right; border-bottom: 1px solid #2a2a4a; }
+td:nth-child(1), td:nth-child(2), td:nth-child(3) { text-align: left; }
+tr:hover { background: #16213e; }
+.up { color: #ff4444; }
+.down { color: #00cc66; }
+.pb-low { background: #1a3a1a; }
+.pb-mid { background: #1a1a2e; }
+.pb-high { background: #3a1a1a; }
+.summary { display: flex; gap: 15px; margin: 10px 0; }
+.card { background: #16213e; padding: 10px 15px; border-radius: 6px; }
+.card .val { font-size: 22px; font-weight: bold; color: #00d4ff; }
+.card .lbl { font-size: 11px; color: #888; }
+</style>
+</head>
+<body>
+
+<h1>📊 大数投资 300万模拟盘</h1>
+<div class="meta" id="meta">加载中...</div>
+
+<div class="summary" id="summary"></div>
+
+<table>
+<thead>
+<tr>
+  <th>行业</th><th>股票</th><th>代码</th>
+  <th>PB(静态)</th><th>PE</th><th>每股净资</th><th>每股收益</th>
+  <th>实时价</th><th>涨跌%</th><th>PB(实时)</th>
+  <th>成本</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+
+<script>
+async function load() {
+  try {
+    const r = await fetch('monitor_data.json?' + Date.now());
+    const data = await r.json();
+    document.getElementById('meta').textContent = `刷新: ${data.refresh_time} | ${data.total_stocks}只 | 数据源: ${data.source}`;
+    
+    // Summary
+    const pbs = data.holdings.map(h => h.pb).filter(v => v);
+    const avgPB = (pbs.reduce((a,b)=>a+b,0)/pbs.length).toFixed(2);
+    const pb25 = pbs.filter(p => p < 0.5).length;
+    const pb50 = pbs.filter(p => p >= 0.5 && p < 1.0).length;
+    document.getElementById('summary').innerHTML = `
+      <div class="card"><div class="val">${data.total_stocks}</div><div class="lbl">持仓</div></div>
+      <div class="card"><div class="val">${avgPB}</div><div class="lbl">平均PB</div></div>
+      <div class="card"><div class="val">${pb25}</div><div class="lbl">PB < 0.5</div></div>
+      <div class="card"><div class="val">${pb50}</div><div class="lbl">PB 0.5-1.0</div></div>
+    `;
+
+    // Table
+    document.getElementById('tbody').innerHTML = data.holdings.map(h => {
+      const pbCls = (h.pb||0) < 0.5 ? 'pb-low' : (h.pb||0) < 1.0 ? 'pb-mid' : 'pb-high';
+      const chg = h.change; const chgCls = chg > 0 ? 'up' : 'down';
+      return `<tr class="${pbCls}">
+        <td>${h.industry}</td>
+        <td><b>${h.name}</b></td>
+        <td>${h.code}</td>
+        <td>${h.pb?.toFixed(3) || '-'}</td>
+        <td>${h.pe?.toFixed(1) || '-'}</td>
+        <td>${h.bps?.toFixed(2) || '-'}</td>
+        <td>${h.eps?.toFixed(3) || '-'}</td>
+        <td><b>${h.price?.toFixed(2) || '-'}</b></td>
+        <td class="${chgCls}">${chg ? chg.toFixed(2)+'%' : '-'}</td>
+        <td>${h.pb_live?.toFixed(2) || '-'}</td>
+        <td>${h.capital?.toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('meta').textContent = '数据加载失败 — 运行 monitor_refresh.py 刷新';
+  }
+}
+load();
+setInterval(load, 60000);  // 每分钟刷新
+</script>
+</body>
+</html>
